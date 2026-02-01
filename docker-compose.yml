@@ -1,0 +1,361 @@
+services:
+  trino-gateway-proxy:
+    build:
+      context: ./trino-gateway-proxy
+      dockerfile: Dockerfile
+    image: dyrasql/trino-gateway-proxy:latest
+    pull_policy: build
+    container_name: trino-gateway-proxy
+    ports:
+      - "8080:8080"
+    environment:
+      - DYRASQL_CORE_URL=http://dyrasql-core:5000
+      - TRINO_GATEWAY_URL=http://trino-gateway:8080
+      # Internal cluster URLs (Docker network)
+      - TRINO_ECS_URL=http://trino-ecs:8080
+      - TRINO_EMR_STANDARD_URL=http://trino-emr-standard:8080
+      - TRINO_EMR_OPTIMIZED_URL=http://trino-emr-optimized:8080
+      # External cluster URLs (for bypass mode - client direct access)
+      - TRINO_ECS_EXTERNAL_URL=http://localhost:8081
+      - TRINO_EMR_STANDARD_EXTERNAL_URL=http://localhost:8082
+      - TRINO_EMR_OPTIMIZED_EXTERNAL_URL=http://localhost:8083
+      - ROUTING_TIMEOUT=5
+      - DATA_TIMEOUT=300
+      - PORT=8080
+      # Bypass mode: nextUri points directly to cluster (more efficient for large data)
+      - BYPASS_MODE=${BYPASS_MODE:-true}
+      # Streaming threshold in bytes (responses larger than this use streaming)
+      - STREAMING_THRESHOLD=${STREAMING_THRESHOLD:-65536}
+      # Logging
+      - LOG_LEVEL=INFO
+      - LOG_DIR=/app/logs
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      dyrasql-core:
+        condition: service_healthy
+      trino-ecs:
+        condition: service_healthy
+      trino-emr-standard:
+        condition: service_healthy
+      trino-emr-optimized:
+        condition: service_healthy
+    networks:
+      - dyrasql-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  gateway-db:
+    image: postgres:16-alpine
+    container_name: gateway-db
+    environment:
+      - POSTGRES_DB=trino_gateway
+      - POSTGRES_USER=gateway
+      - POSTGRES_PASSWORD=gateway123
+    volumes:
+      - gateway-db-data:/var/lib/postgresql/data
+    networks:
+      - dyrasql-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gateway -d trino_gateway"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  trino-gateway:
+    build:
+      context: ./trino-gateway
+      dockerfile: Dockerfile
+    image: dyrasql/trino-gateway:latest
+    pull_policy: build
+    container_name: trino-gateway
+    ports:
+      - "8085:8080"
+      - "8084:8081"
+    volumes:
+      - ./trino-gateway/config.yaml:/etc/gateway/config.yaml:ro
+    environment:
+      - GATEWAY_CONFIG_PATH=/etc/gateway/config.yaml
+      - DYRASQL_CORE_URL=http://dyrasql-core:5000
+    depends_on:
+      gateway-db:
+        condition: service_healthy
+      dyrasql-core:
+        condition: service_started
+      trino-ecs:
+        condition: service_started
+      trino-emr-standard:
+        condition: service_started
+      trino-emr-optimized:
+        condition: service_started
+    networks:
+      - dyrasql-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/entity?entityType=GATEWAY_BACKEND"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  gateway-setup:
+    image: alpine:latest
+    container_name: gateway-setup
+    volumes:
+      - ./scripts/setup-gateway-backends-auto.sh:/setup.sh:ro
+    environment:
+      - GATEWAY_URL=http://trino-gateway:8080
+    depends_on:
+      trino-gateway:
+        condition: service_healthy
+      trino-ecs:
+        condition: service_healthy
+      trino-emr-standard:
+        condition: service_healthy
+      trino-emr-optimized:
+        condition: service_healthy
+    networks:
+      - dyrasql-network
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        apk add --no-cache bash curl python3
+        /bin/bash /setup.sh
+        echo "Setup concluído. Mantendo container ativo para logs..."
+        tail -f /dev/null
+    restart: "no"
+
+  dyrasql-core:
+    build:
+      context: ./dyrasql-core
+      dockerfile: Dockerfile
+    image: dyrasql/core:latest
+    pull_policy: build
+    container_name: dyrasql-core
+    ports:
+      - "5001:5000"
+    environment:
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_PROFILE=${AWS_PROFILE:-default}
+      - DYNAMODB_TABLE=${DYNAMODB_TABLE:-dyrasql-history}
+      - S3_BUCKET=${S3_BUCKET}
+      - S3_PREFIX=${S3_PREFIX:-iceberg/}
+      - TRINO_URL=${TRINO_URL:-http://trino-ecs:8080}
+      - TRINO_USER=${TRINO_USER:-admin}
+      - LOG_LEVEL=INFO
+      - DYRASQL_WEIGHT_VOLUME=${DYRASQL_WEIGHT_VOLUME:-0.5}
+      - DYRASQL_WEIGHT_COMPLEXITY=${DYRASQL_WEIGHT_COMPLEXITY:-0.3}
+      - DYRASQL_WEIGHT_HISTORICAL=${DYRASQL_WEIGHT_HISTORICAL:-0.2}
+      - DYRASQL_ECS_THRESHOLD=${DYRASQL_ECS_THRESHOLD:-0.3}
+      - DYRASQL_EMR_STANDARD_THRESHOLD=${DYRASQL_EMR_STANDARD_THRESHOLD:-0.7}
+      - SAVE_EXPLAINS=${SAVE_EXPLAINS:-true}
+      - EXPLAINS_DIR=${EXPLAINS_DIR:-/app/explains}
+      # Logging
+      - LOG_DIR=/app/logs
+      # Internal cluster URLs (Docker network)
+      - TRINO_ECS_URL=http://trino-ecs:8080
+      - TRINO_EMR_STANDARD_URL=http://trino-emr-standard:8080
+      - TRINO_EMR_OPTIMIZED_URL=http://trino-emr-optimized:8080
+      # External cluster URLs (for bypass mode - client direct access)
+      - TRINO_ECS_EXTERNAL_URL=http://localhost:8081
+      - TRINO_EMR_STANDARD_EXTERNAL_URL=http://localhost:8082
+      - TRINO_EMR_OPTIMIZED_EXTERNAL_URL=http://localhost:8083
+      # Bypass mode: nextUri points directly to cluster (more efficient for large data)
+      - BYPASS_MODE=${BYPASS_MODE:-true}
+      # Streaming threshold in bytes (responses larger than this use streaming)
+      - STREAMING_THRESHOLD=${STREAMING_THRESHOLD:-65536}
+      - DATA_TIMEOUT=300
+    volumes:
+      - ./dyrasql-core:/app
+      - ${HOME}/.aws:/root/.aws:ro
+      - ./explains:/app/explains
+      - ./logs:/app/logs
+    networks:
+      - dyrasql-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  trino-ecs:
+    build:
+      context: ./trino
+      dockerfile: Dockerfile
+      args:
+        - CLUSTER_TYPE=ecs
+        - WORKER_COUNT=2
+        - MEMORY_GB=4
+    image: dyrasql/trino-ecs:latest
+    pull_policy: build
+    container_name: trino-ecs
+    ports:
+      - "8081:8080"
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+    environment:
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_PROFILE=${AWS_PROFILE:-default}
+      - AWS_DEFAULT_REGION=${AWS_REGION:-us-east-1}
+      - S3_BUCKET=${S3_BUCKET}
+      - S3_PREFIX=${S3_PREFIX:-iceberg/}
+      - CLUSTER_NAME=ecs-cluster
+      - CLUSTER_TYPE=ecs
+      - QUERY_MAX_MEMORY=2GB
+      - QUERY_MAX_EXECUTION_TIME=5m
+    volumes:
+      - ./trino/config/ecs:/etc/trino
+      - ${HOME}/.aws:/root/.aws:ro
+      - trino-ecs-data:/var/trino/data
+    networks:
+      - dyrasql-network
+    user: root
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        echo "=== Iniciando configuração ==="
+        echo "Variáveis de ambiente:"
+        echo "  AWS_REGION=${AWS_REGION}"
+        echo "  S3_BUCKET=${S3_BUCKET}"
+        echo "  S3_PREFIX=${S3_PREFIX}"
+        /usr/local/bin/configure-credentials.sh
+        echo "=== Verificando substituição ==="
+        cat /etc/trino/catalog/hive.properties | head -10
+        chown -R trino:trino /etc/trino
+        exec /usr/lib/trino/bin/run-trino
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/v1/info"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  trino-emr-standard:
+    build:
+      context: ./trino
+      dockerfile: Dockerfile
+      args:
+        - CLUSTER_TYPE=emr-standard
+        - WORKER_COUNT=4
+        - MEMORY_GB=16
+    image: dyrasql/trino-emr-standard:latest
+    pull_policy: build
+    container_name: trino-emr-standard
+    ports:
+      - "8082:8080"
+    deploy:
+      resources:
+        limits:
+          memory: 12G
+        reservations:
+          memory: 8G
+    environment:
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_PROFILE=${AWS_PROFILE:-default}
+      - AWS_DEFAULT_REGION=${AWS_REGION:-us-east-1}
+      - S3_BUCKET=${S3_BUCKET}
+      - S3_PREFIX=${S3_PREFIX:-iceberg/}
+      - CLUSTER_NAME=emr-standard-cluster
+      - CLUSTER_TYPE=emr-standard
+      - QUERY_MAX_MEMORY=8GB
+      - QUERY_MAX_EXECUTION_TIME=30m
+    volumes:
+      - ./trino/config/emr-standard:/etc/trino
+      - ${HOME}/.aws:/root/.aws:ro
+      - trino-emr-standard-data:/var/trino/data
+    networks:
+      - dyrasql-network
+    user: root
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        echo "=== Iniciando configuração ==="
+        echo "Variáveis de ambiente:"
+        echo "  AWS_REGION=${AWS_REGION}"
+        echo "  S3_BUCKET=${S3_BUCKET}"
+        echo "  S3_PREFIX=${S3_PREFIX}"
+        /usr/local/bin/configure-credentials.sh
+        echo "=== Verificando substituição ==="
+        cat /etc/trino/catalog/hive.properties | head -10
+        chown -R trino:trino /etc/trino
+        exec /usr/lib/trino/bin/run-trino
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/v1/info"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  trino-emr-optimized:
+    build:
+      context: ./trino
+      dockerfile: Dockerfile
+      args:
+        - CLUSTER_TYPE=emr-optimized
+        - WORKER_COUNT=8
+        - MEMORY_GB=32
+    image: dyrasql/trino-emr-optimized:latest
+    pull_policy: build
+    container_name: trino-emr-optimized
+    ports:
+      - "8083:8080"
+    deploy:
+      resources:
+        limits:
+          memory: 24G
+        reservations:
+          memory: 16G
+    environment:
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_PROFILE=${AWS_PROFILE:-default}
+      - AWS_DEFAULT_REGION=${AWS_REGION:-us-east-1}
+      - S3_BUCKET=${S3_BUCKET}
+      - S3_PREFIX=${S3_PREFIX:-iceberg/}
+      - CLUSTER_NAME=emr-optimized-cluster
+      - CLUSTER_TYPE=emr-optimized
+      - QUERY_MAX_MEMORY=16GB
+      - QUERY_MAX_EXECUTION_TIME=60m
+    volumes:
+      - ./trino/config/emr-optimized:/etc/trino
+      - ${HOME}/.aws:/root/.aws:ro
+      - trino-emr-optimized-data:/var/trino/data
+    networks:
+      - dyrasql-network
+    user: root
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        echo "=== Iniciando configuração ==="
+        echo "Variáveis de ambiente:"
+        echo "  AWS_REGION=${AWS_REGION}"
+        echo "  S3_BUCKET=${S3_BUCKET}"
+        echo "  S3_PREFIX=${S3_PREFIX}"
+        /usr/local/bin/configure-credentials.sh
+        echo "=== Verificando substituição ==="
+        cat /etc/trino/catalog/hive.properties | head -10
+        chown -R trino:trino /etc/trino
+        exec /usr/lib/trino/bin/run-trino
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/v1/info"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  trino-ecs-data:
+    driver: local
+  trino-emr-standard-data:
+    driver: local
+  trino-emr-optimized-data:
+    driver: local
+  gateway-db-data:
+    driver: local
+
+networks:
+  dyrasql-network:
+    driver: bridge
+

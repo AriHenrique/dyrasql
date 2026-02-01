@@ -1,0 +1,45 @@
+# Environment variables
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
+dist/
+build/
+
+# Docker
+logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Sphinx documentation
+docs/_build/
+
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/.terraform.lock.hcl
+
+# Explains output
+explains/
+
+# Temporary files
+*.tmp
+*.bak
+*.log
+docs/.venv
