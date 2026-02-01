@@ -7,7 +7,7 @@ Todas as mudanças notáveis do projeto são documentadas aqui.
 O formato segue `Keep a Changelog <https://keepachangelog.com/pt-BR/1.0.0/>`_
 e o projeto adere ao `Versionamento Semântico <https://semver.org/lang/pt-BR/>`_.
 
-[1.0.0] - 2024-XX-XX
+[1.0.0] - 2026-XX-XX
 --------------------
 
 Adicionado
@@ -42,7 +42,7 @@ Dependências
 - Docker Compose 2.20+
 - AWS SDK (boto3) 1.34.0
 
-[0.1.0] - 2024-XX-XX (Beta)
+[0.1.0] - 2026-XX-XX (Beta)
 ---------------------------
 
 Adicionado

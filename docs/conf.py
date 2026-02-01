@@ -77,10 +77,10 @@ html_theme_options = {
         "toc.follow",
     ],
     # Exibe a versão ao lado da barra de pesquisa
-    # "version_dropdown": True,
-    # "version_info": [
-    #     {"version": version, "title": version, "aliases": ["latest"]},
-    # ],
+    "version_dropdown": True,
+    "version_info": [
+        {"version": version, "title": version, "aliases": ["latest"]},
+    ],
 }
 
 # Copy button configuration

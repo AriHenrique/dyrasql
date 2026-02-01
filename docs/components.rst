@@ -70,7 +70,7 @@ Analisa queries SQL e extrai características.
    analyzer = QueryAnalyzer(trino_url="http://localhost:8081")
 
    result = analyzer.analyze(
-       query="SELECT * FROM vendas WHERE data >= '2024-01-01'"
+       query="SELECT * FROM vendas WHERE data >= '2026-01-01'"
    )
 
    print(result)
