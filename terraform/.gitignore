@@ -1,0 +1,31 @@
+# Arquivos de estado do Terraform
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+
+# Arquivos de lock
+.terraform.lock.hcl
+
+# Diretório de plugins
+.terraform/
+.terraform.lock.hcl
+
+# Arquivos de variáveis com valores sensíveis
+terraform.tfvars
+*.tfvars
+!terraform.tfvars.example
+
+# Arquivos de crash
+crash.log
+crash.*.log
+
+# Arquivos de override
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Arquivos de CLI
+.terraformrc
+terraform.rc
+

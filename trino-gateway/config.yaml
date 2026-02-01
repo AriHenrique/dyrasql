@@ -1,0 +1,17 @@
+serverConfig:
+  node.environment: production
+  http-server.http.port: 8080
+
+routingRules:
+  rulesEngineEnabled: false
+
+dataStore:
+  jdbcUrl: jdbc:postgresql://gateway-db:5432/trino_gateway
+  user: gateway
+  password: gateway123
+  driver: org.postgresql.Driver
+  runMigrationsEnabled: true
+  queryHistoryHoursRetention: 24
+
+clusterStatsConfiguration:
+  monitorType: INFO_API
