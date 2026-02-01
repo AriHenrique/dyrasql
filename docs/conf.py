@@ -22,7 +22,7 @@ else:
 
 # -- Project information -----------------------------------------------------
 project = 'DyraSQL'
-copyright = '2024, DyraSQL Team'
+copyright = '2026, DyraSQL Team'
 author = 'DyraSQL Team'
 
 # -- General configuration ---------------------------------------------------
@@ -67,7 +67,7 @@ html_theme_options = {
         },
     ],
     "repo_url": "https://github.com/arihenrique/dyrasql",
-    "repo_name": "dyrasql",
+    "repo_name": "arihenrique/dyrasql",
     "features": [
         "content.code.copy",
         "navigation.tabs",
@@ -77,10 +77,10 @@ html_theme_options = {
         "toc.follow",
     ],
     # Exibe a versão ao lado da barra de pesquisa
-    "version_dropdown": True,
-    "version_info": [
-        {"version": version, "title": version, "aliases": ["latest"]},
-    ],
+    # "version_dropdown": True,
+    # "version_info": [
+    #     {"version": version, "title": version, "aliases": ["latest"]},
+    # ],
 }
 
 # Copy button configuration
