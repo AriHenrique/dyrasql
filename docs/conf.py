@@ -76,11 +76,8 @@ html_theme_options = {
         "search.highlight",
         "toc.follow",
     ],
-    # Exibe a versão ao lado da barra de pesquisa
-    "version_dropdown": True,
-    "version_info": [
-        {"version": version, "title": version, "aliases": ["latest"]},
-    ],
+    # Versão oculta (sem dropdown ao lado do título)
+    "version_dropdown": False,
 }
 
 # Copy button configuration
